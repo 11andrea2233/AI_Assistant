@@ -15,31 +15,47 @@ class TTS:
     
     def speak(self, text):
         try:
-            # STEP 1: Create a Deepgram client using the API key from environment variables
-            deepgram = DeepgramClient(api_key=os.getenv("DEEPGRAM_API_KEY"))
+            # Ensure text is a string and not empty
+            if not isinstance(text, str) or not text.strip():
+                print("Empty or invalid text input")
+                return
 
-            # STEP 2: Configure the options
-            options = SpeakOptions(
-                model="aura-asteria-en",
-                encoding="linear16",
-                container="wav"
-            )
+            # Clean up the text
+            text = text.strip()
+            
+            # Break up long text into chunks (Deepgram has a limit)
+            max_chars = 1000
+            text_chunks = [text[i:i+max_chars] for i in range(0, len(text), max_chars)]
+            
+            for i, chunk in enumerate(text_chunks):
+                # Create unique filename for each chunk
+                chunk_file = self.audio_dir / f"output_{i}.wav"
+                
+                # Initialize Deepgram client
+                deepgram = DeepgramClient(api_key=os.getenv("DEEPGRAM_API_KEY"))
 
-            # STEP 3: Call the save method on the speak property
-            SPEAK_OPTIONS = {"text": text}
-            response = deepgram.speak.v("1").save(str(self.filename), SPEAK_OPTIONS, options)
+                # Configure options
+                options = SpeakOptions(
+                    model="aura-asteria-en",
+                    encoding="linear16",
+                    container="wav"
+                )
 
-            # STEP 4: Play the audio file
-            playsound(str(self.filename))
+                # Generate speech
+                SPEAK_OPTIONS = {"text": chunk}
+                response = deepgram.speak.v("1").save(str(chunk_file), SPEAK_OPTIONS, options)
 
-            # STEP 5: Clean up the file after playing
-            try:
-                os.remove(self.filename)
-            except:
-                pass
+                # Play the audio
+                playsound(str(chunk_file))
+
+                # Clean up the file
+                try:
+                    os.remove(chunk_file)
+                except:
+                    pass
 
         except Exception as e:
-            print(f"Exception: {e}")
+            print(f"TTS Exception: {e}")
 
 if __name__ == "__main__":
     tts = TTS()

@@ -1,28 +1,49 @@
-import os
-from pydantic import Field
-from ..base_tool import BaseTool
+from pydantic import BaseModel
+from typing import Optional
 from tavily import TavilyClient
+import os
 
-class SearchWebTool(BaseTool):
-    """
-    A tool that searches the internet and get up to date information for a given query
-    """
-    query: str = Field(description='Search query string')
+class SearchWebTool(BaseModel):
+    query: Optional[str] = None
 
-    def search_web(self, query: str):
-        """
-        @notice Searches the internet for the given query.
-        @param query The search query.
-        @return content The combined content from the search results.
-        """
-        # Initialize the Tavily client for searching internet
-        tavily = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
+    class Config:
+        arbitrary_types_allowed = True
 
-        content = ""
-        response = tavily.search(query=query, max_results=4)
-        for r in response['results']:
-            content += r['content']
-        return content
-    
-    def run(self):
-        return self.search_web(self.query)
+    @property
+    def openai_schema(self):
+        return {
+            "name": "search_web",
+            "description": "Search the web for current information",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query"
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+
+    def format_results(self, results):
+        formatted_text = "Here are the recent news about your query:\n\n"
+        for i, result in enumerate(results[:3], 1):  # Only show top 3 results
+            formatted_text += f"{i}. {result['title']}\n"
+            formatted_text += f"   {result['content'][:200]}...\n\n"
+        return formatted_text
+
+    def execute(self, **kwargs):
+        self.query = kwargs.get('query')
+        
+        try:
+            client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
+            result = client.search(query=self.query)
+            
+            if 'results' in result:
+                return self.format_results(result['results'])
+            else:
+                return "No results found for your query."
+                
+        except Exception as e:
+            return f"Search error: {str(e)}"
